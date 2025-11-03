@@ -6,8 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write  # needed for creating GitHub releases
-  actions: read
+  contents: write
 
 jobs:
   release:
@@ -26,58 +25,60 @@ jobs:
 
       - name: Generate changelog
         id: changelog
-        shell: bash
         run: |
-          set -e
           git fetch --prune --unshallow || true
-          git fetch --tags --force || true
 
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          CURRENT_TAG=${GITHUB_REF##*/}
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          CUR_TAG=${GITHUB_REF_NAME}
 
-          echo "## Changes in ${CURRENT_TAG}" > changelog.md
-
-          if [ -z "$PREV_TAG" ]; then
-            echo "(no previous tag found, listing all commits)" >> changelog.md
-            RANGE="--since='2 years ago'"
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..$CUR_TAG"
           else
-            RANGE="$PREV_TAG..HEAD"
+            RANGE="$CUR_TAG"
           fi
 
-          echo "" >> changelog.md
-          echo "### Features" >> changelog.md
-          git log $RANGE --pretty=format:'- %s' | grep '^feat:' || echo "- None" >> changelog.md
+          echo "Generating changelog for range: $RANGE"
 
-          echo "" >> changelog.md
-          echo "### Bug Fixes" >> changelog.md
-          git log $RANGE --pretty=format:'- %s' | grep '^fix:' || echo "- None" >> changelog.md
+          make_section() {
+            local title=$1
+            local pattern=$2
+            local logs
+            logs=$(git log $RANGE --pretty=format:'- %s' | grep -i "$pattern" || true)
+            if [ -n "$logs" ]; then
+              echo "### $title"
+              echo "$logs"
+              echo ""
+            fi
+          }
 
-          echo "" >> changelog.md
-          echo "### Security" >> changelog.md
-          git log $RANGE --pretty=format:'- %s' | grep '^security:' || echo "- None" >> changelog.md
+          echo "## Changes in $CUR_TAG" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
 
-          echo "" >> changelog.md
-          echo "### Chores" >> changelog.md
-          git log $RANGE --pretty=format:'- %s' | grep '^chore:' || echo "- None" >> changelog.md
+          make_section "Features" '^feat'
+          make_section "Bug Fixes" '^fix'
+          make_section "Documentation" '^docs'
+          make_section "Chores" '^chore'
+          make_section "Refactors" '^refactor'
+          make_section "Tests" '^test'
 
-          echo "" >> changelog.md
-          echo "### Documentation" >> changelog.md
-          git log $RANGE --pretty=format:'- %s' | grep '^docs:' || echo "- None" >> changelog.md
+          OTHER_LOGS=$(git log $RANGE --pretty=format:'- %s' | grep -viE '^(feat|fix|docs|chore|refactor|test):' || true)
+          if [ -n "$OTHER_LOGS" ]; then
+            echo "### Other" >> CHANGELOG.md
+            echo "$OTHER_LOGS" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
 
-          echo "" >> changelog.md
-          echo "### Other" >> changelog.md
-          git log $RANGE --pretty=format:'- %s' | grep -vE "^(feat|fix|security|docs|chore):" || echo "- None" >> changelog.md
+          echo "----- GENERATED CHANGELOG -----"
+          cat CHANGELOG.md
+          echo "-------------------------------"
 
-          # Save for GitHub Release body
           echo "release_body<<EOF" >> $GITHUB_OUTPUT
-          cat changelog.md >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Show changelog preview
-        run: cat changelog.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.release_body }}
-          files: changelog.md
