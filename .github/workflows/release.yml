@@ -29,47 +29,31 @@ jobs:
           git fetch --prune --unshallow || true
           git fetch --tags --force || true
 
-          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           CUR_TAG=${GITHUB_REF_NAME}
+          ROOT_COMMIT=$(git rev-list --max-parents=0 HEAD)
+          RANGE="$ROOT_COMMIT..HEAD"
 
-          echo "Generating changelog for range: $PREV_TAG..$CUR_TAG"
+          echo "Generating changelog for range: $RANGE"
 
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..HEAD"
-          else
-            ROOT_COMMIT=$(git rev-list --max-parents=0 HEAD)
-            RANGE="$ROOT_COMMIT..HEAD"
-          fi
+          ALL_LOGS=$(git log $RANGE --pretty=format:'- %s')
 
+          FEATURES=$(echo "$ALL_LOGS" | grep -i '^feat:' || true)
+          FIXES=$(echo "$ALL_LOGS" | grep -i '^fix:' || true)
+          DOCS=$(echo "$ALL_LOGS" | grep -i '^docs:' || true)
+          CHORES=$(echo "$ALL_LOGS" | grep -i '^chore:' || true)
+          REFACTORS=$(echo "$ALL_LOGS" | grep -i '^refactor:' || true)
+          TESTS=$(echo "$ALL_LOGS" | grep -i '^test:' || true)
+          OTHER=$(echo "$ALL_LOGS" | grep -viE '^(feat|fix|docs|chore|refactor|test):' || true)
+
+          # write changelog
           echo "## Changes in $CUR_TAG" > CHANGELOG.md
-          echo "" >> CHANGELOG.md
-
-          make_section() {
-            local title=$1
-            local pattern=$2
-            local logs
-            logs=$(git log $RANGE --pretty=format:'- %s' | grep -i "$pattern" || true)
-            if [ -n "$logs" ]; then
-              echo "### $title" >> CHANGELOG.md
-              echo "$logs" >> CHANGELOG.md
-              echo "" >> CHANGELOG.md
-            fi
-          }
-
-          # Generate sections
-          make_section "Features" '^feat'
-          make_section "Bug Fixes" '^fix'
-          make_section "Documentation" '^docs'
-          make_section "Chores" '^chore'
-          make_section "Refactors" '^refactor'
-          make_section "Tests" '^test'
-
-          OTHER_LOGS=$(git log $RANGE --pretty=format:'- %s' | grep -viE '^(feat|fix|docs|chore|refactor|test):' || true)
-          if [ -n "$OTHER_LOGS" ]; then
-            echo "### Other" >> CHANGELOG.md
-            echo "$OTHER_LOGS" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
+          [ -n "$FEATURES" ] && echo -e "\n### Features\n$FEATURES" >> CHANGELOG.md
+          [ -n "$FIXES" ] && echo -e "\n### Bug Fixes\n$FIXES" >> CHANGELOG.md
+          [ -n "$DOCS" ] && echo -e "\n### Documentation\n$DOCS" >> CHANGELOG.md
+          [ -n "$CHORES" ] && echo -e "\n### Chores\n$CHORES" >> CHANGELOG.md
+          [ -n "$REFACTORS" ] && echo -e "\n### Refactors\n$REFACTORS" >> CHANGELOG.md
+          [ -n "$TESTS" ] && echo -e "\n### Tests\n$TESTS" >> CHANGELOG.md
+          [ -n "$OTHER" ] && echo -e "\n### Other\n$OTHER" >> CHANGELOG.md
 
           echo "----- GENERATED CHANGELOG -----"
           cat CHANGELOG.md
