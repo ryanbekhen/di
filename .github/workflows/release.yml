@@ -27,17 +27,22 @@ jobs:
         id: changelog
         run: |
           git fetch --prune --unshallow || true
+          git fetch --tags --force || true
 
           PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           CUR_TAG=${GITHUB_REF_NAME}
 
+          echo "Generating changelog for range: $PREV_TAG..$CUR_TAG"
+
           if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..$CUR_TAG"
+            RANGE="$PREV_TAG..HEAD"
           else
-            RANGE="$CUR_TAG"
+            ROOT_COMMIT=$(git rev-list --max-parents=0 HEAD)
+            RANGE="$ROOT_COMMIT..HEAD"
           fi
 
-          echo "Generating changelog for range: $RANGE"
+          echo "## Changes in $CUR_TAG" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
 
           make_section() {
             local title=$1
@@ -45,15 +50,13 @@ jobs:
             local logs
             logs=$(git log $RANGE --pretty=format:'- %s' | grep -i "$pattern" || true)
             if [ -n "$logs" ]; then
-              echo "### $title"
-              echo "$logs"
-              echo ""
+              echo "### $title" >> CHANGELOG.md
+              echo "$logs" >> CHANGELOG.md
+              echo "" >> CHANGELOG.md
             fi
           }
 
-          echo "## Changes in $CUR_TAG" > CHANGELOG.md
-          echo "" >> CHANGELOG.md
-
+          # Generate sections
           make_section "Features" '^feat'
           make_section "Bug Fixes" '^fix'
           make_section "Documentation" '^docs'
