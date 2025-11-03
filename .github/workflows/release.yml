@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.25
+
+      - name: Generate release description
+        id: release_desc
+        run: |
+          git fetch --prune --unshallow || true
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+          echo "## Changes in ${GITHUB_REF##*/}" > changelog.md
+
+          echo "### Features" >> changelog.md
+          git log $PREV_TAG..HEAD --pretty=format:'- %s' | grep '^feat:' || echo "- None" >> changelog.md
+
+          echo "### Bug Fixes" >> changelog.md
+          git log $PREV_TAG..HEAD --pretty=format:'- %s' | grep '^fix:' || echo "- None" >> changelog.md
+
+          echo "### Security" >> changelog.md
+          git log $PREV_TAG..HEAD --pretty=format:'- %s' | grep '^security:' || echo "- None" >> changelog.md
+
+          echo "### Chores" >> changelog.md
+          git log $PREV_TAG..HEAD --pretty=format:'- %s' | grep '^chore:' || echo "- None" >> changelog.md
+
+          echo "### Documentation" >> changelog.md
+          git log $PREV_TAG..HEAD --pretty=format:'- %s' | grep '^docs:' || echo "- None" >> changelog.md
+
+          echo "### Other" >> changelog.md
+          git log $PREV_TAG..HEAD --pretty=format:'- %s' | grep -vE "^(feat|fix|security|docs|chore):" || echo "- None" >> changelog.md
+
+          # Output for GitHub Release body
+          echo "release_body<<EOF" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.release_desc.outputs.release_body }}
+          draft: false
+          prerelease: false
