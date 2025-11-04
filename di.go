@@ -2,6 +2,7 @@ package di
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 )
 
@@ -11,33 +12,34 @@ var instances sync.Map
 // factories stores factory functions for lazy initialization
 var factories sync.Map
 
+// typeKey returns a unique string key for any generic type (including interfaces)
+func typeKey[T any]() string {
+	return reflect.TypeOf((*T)(nil)).Elem().String()
+}
+
 // Register registers a singleton instance directly
 func Register[T any](instance T) {
-	key := fmt.Sprintf("%T", *new(T)) // type name as key
+	key := typeKey[T]()
 	instances.Store(key, instance)
 }
 
 // RegisterFactory registers a factory function for lazy initialization
-// The instance is created only when Resolve is called for the first time
 func RegisterFactory[T any](f func() T) {
-	key := fmt.Sprintf("%T", *new(T))
+	key := typeKey[T]()
 	factories.Store(key, f)
 }
 
 // Resolve retrieves an instance from the container
-// If the instance is registered via factory, it will be created lazily
 func Resolve[T any]() (T, error) {
-	key := fmt.Sprintf("%T", *new(T))
+	key := typeKey[T]()
 
-	// Check if instance already exists
 	if v, ok := instances.Load(key); ok {
 		return v.(T), nil
 	}
 
-	// Check if factory exists
 	if f, ok := factories.Load(key); ok {
-		instance := f.(func() T)()     // call factory function
-		instances.Store(key, instance) // store for next calls
+		instance := f.(func() T)()
+		instances.Store(key, instance)
 		return instance, nil
 	}
 
@@ -56,7 +58,7 @@ func MustResolve[T any]() T {
 
 // Unregister removes an instance or factory from the container
 func Unregister[T any]() {
-	key := fmt.Sprintf("%T", *new(T))
+	key := typeKey[T]()
 	instances.Delete(key)
 	factories.Delete(key)
 }
