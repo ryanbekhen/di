@@ -1,5 +1,9 @@
 # di - Simple Dependency Injection for Go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/ryanbekhen/di.svg)](https://pkg.go.dev/github.com/ryanbekhen/di)
+[![Coverage Status](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/ryanbekhen/di/coverage-badge/.badges/coverage.json)](https://codecov.io/gh/ryanbekhen/di)
+[![License](https://img.shields.io/github/license/ryanbekhen/di?style=flat-square)](LICENSE)
+
 A lightweight, thread-safe, and lazy-initialized **Dependency Injection (DI)** library for Go.
 Designed to make managing dependencies easy in any Go project, from small utilities to large applications.
 
